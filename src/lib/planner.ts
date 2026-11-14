@@ -287,3 +287,35 @@ export function behindBy(plan: DayPlan | undefined, doneIds: string[], now: numb
   if (!cur) return 0
   return Math.max(0, now - cur.end)
 }
+
+// ---------- Lernende Zeitschätzung ----------
+
+/**
+ * Vergleicht bei den letzten Aufgaben mit Timer die geschätzte mit der tatsächlichen Dauer.
+ * Ergebnis ist der Faktor, mit dem künftige Schätzungen im Plan verlängert werden (1 bis 1,6).
+ * Verkürzt wird nie: Wer den Timer früh stoppt, soll dadurch keinen engeren Plan bekommen.
+ */
+export function estimateFactor(tasks: Task[]): number {
+  const sample = tasks.filter((t) => t.status === 'done' && t.actualMinutes >= 5 && t.minutes > 0).slice(-20)
+  if (sample.length < 5) return 1
+  const ratio = sample.reduce((a, t) => a + t.actualMinutes, 0) / sample.reduce((a, t) => a + t.minutes, 0)
+  return Math.min(1.6, Math.max(1, Math.round(ratio * 20) / 20))
+}
+
+// ---------- Vernachlässigte Zonen ----------
+
+/** Erkundete Zonen, in denen seit mindestens `limit` Tagen keine Quest erledigt wurde. */
+export function neglectedZones(tasks: Task[], zonesDone: number[], startDate: string, today: string, limit = 21): { zone: number; days: number }[] {
+  const key = (ms: number) => {
+    const d = new Date(ms)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  const out: { zone: number; days: number }[] = []
+  for (const zone of zonesDone) {
+    let last = startDate
+    for (const t of tasks) if (t.zone === zone && t.status === 'done' && t.doneAt && key(t.doneAt) > last) last = key(t.doneAt)
+    const days = daysBetween(last, today)
+    if (days >= limit) out.push({ zone, days })
+  }
+  return out.sort((a, b) => b.days - a.days)
+}

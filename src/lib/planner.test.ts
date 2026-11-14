@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDayPlan, currentBlock, behindBy, LIGHT_FROM, MAX_CHUNK, type PlanInput } from './planner'
+import { buildDayPlan, currentBlock, behindBy, estimateFactor, neglectedZones, LIGHT_FROM, MAX_CHUNK, type PlanInput } from './planner'
 import type { Task } from './types'
 
 let n = 0
@@ -188,5 +188,40 @@ describe('Was jetzt?', () => {
     const plan = buildDayPlan(base())
     expect(behindBy(plan, [], 6 * 60 + 40)).toBe(0)
     expect(behindBy(plan, [], 8 * 60)).toBe(60)
+  })
+})
+
+describe('Lernende Zeitschätzung', () => {
+  const done = (minutes: number, actual: number) => task({ status: 'done', minutes, actualMinutes: actual })
+
+  it('bleibt bei 1, solange es zu wenig Daten gibt', () => {
+    expect(estimateFactor([done(30, 60), done(30, 60)])).toBe(1)
+  })
+
+  it('verlängert künftige Schätzungen, wenn Aufgaben länger dauern', () => {
+    expect(estimateFactor(Array.from({ length: 6 }, () => done(30, 40)))).toBe(1.35)
+  })
+
+  it('ist nach oben begrenzt und verkürzt nie', () => {
+    expect(estimateFactor(Array.from({ length: 6 }, () => done(30, 120)))).toBe(1.6)
+    expect(estimateFactor(Array.from({ length: 6 }, () => done(60, 20)))).toBe(1)
+  })
+
+  it('ignoriert Aufgaben ohne Timer', () => {
+    expect(estimateFactor([...Array.from({ length: 4 }, () => done(30, 60)), done(30, 0), done(30, 0)])).toBe(1)
+  })
+})
+
+describe('Vernachlässigte Zonen', () => {
+  const at = (d: string) => new Date(d + 'T12:00:00').getTime()
+
+  it('meldet erkundete Zonen ohne erledigte Quest seit 3 Wochen', () => {
+    const tasks = [task({ zone: 4, status: 'done', doneAt: at('2026-10-01') }), task({ zone: 5, status: 'done', doneAt: at('2026-11-10') })]
+    expect(neglectedZones(tasks, [4, 5], '2026-09-01', '2026-11-14')).toEqual([{ zone: 4, days: 44 }])
+  })
+
+  it('meldet nichts in den ersten Wochen nach dem Start und nichts für Zonen im Nebel', () => {
+    expect(neglectedZones([], [1, 8], '2026-11-01', '2026-11-14')).toEqual([])
+    expect(neglectedZones([], [1], '2026-09-01', '2026-11-14').map((n) => n.zone)).toEqual([1])
   })
 })

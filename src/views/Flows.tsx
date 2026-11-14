@@ -400,9 +400,20 @@ export function Shutdown({ onClose }: { onClose: () => void }) {
 
 export function LaterSheet({ taskId, onClose }: { taskId: string; onClose: () => void }) {
   const later = useStore((s) => s.laterTask)
+  const rules = useStore((s) => s.data.ifThen)
   return (
     <Sheet onClose={onClose}>
       <h2>Okay, später. Woran liegt’s?</h2>
+      {rules.length > 0 && (
+        <div className="notice col" style={{ gap: 4 }}>
+          <b>Kurz vorher: deine eigene Regel</b>
+          {rules.slice(0, 3).map((r) => (
+            <span key={r.id}>
+              Wenn {r.when}, dann {r.then}.
+            </span>
+          ))}
+        </div>
+      )}
       <p className="muted small">Hilft mir, besser für dich zu planen. Die Aufgabe wandert auf morgen.</p>
       <div className="chips stack">
         {LATER_REASONS.map((r) => (

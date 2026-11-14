@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { FREEZE_COST } from '../lib/xp'
+import { estimateFactor } from '../lib/planner'
 import { weekStart } from '../lib/pipelines'
 import { addDays, dateKey, WEEKDAYS, weekdayOf } from '../lib/date'
 import { ZONES } from '../lib/zones'
@@ -119,6 +120,8 @@ export function Stats() {
   const shutdowns = days.filter((d) => data.days[d]?.shutdownDone).length
   const byZone = ZONES.map((z) => ({ z, min: doneThisWeek.filter((t) => t.zone === z.id).reduce((s, t) => s + (t.actualMinutes || t.minutes), 0) })).filter((x) => x.min > 0)
   const maxZone = Math.max(1, ...byZone.map((x) => x.min))
+  const timed = data.tasks.filter((t) => t.status === 'done' && t.actualMinutes >= 5 && t.minutes > 0).slice(-20)
+  const factor = estimateFactor(data.tasks)
   const hours = (m: number) => (m >= 60 ? `${(m / 60).toLocaleString('de-DE', { maximumFractionDigits: 1 })} Std` : `${m} Min`)
 
   const tiles: [string, string][] = [
@@ -178,7 +181,61 @@ export function Stats() {
             </div>
           ))}
       </div>
-      <p className="tiny muted center">Heatmap, Schätzgenauigkeit und der Wochenbericht am Sonntag kommen in Phase 3.</p>
+      <div className="card col">
+        <h3>Zeitschätzung</h3>
+        {timed.length < 5 ? (
+          <p className="muted small">Noch zu wenig Daten. Sobald du 5 Aufgaben mit dem Timer erledigt hast ({timed.length} bisher), lernt der Plan, wie lange du wirklich brauchst.</p>
+        ) : (
+          <p className="small">
+            Du brauchst im Schnitt <b>{Math.round((timed.reduce((a, t) => a + t.actualMinutes, 0) / timed.reduce((a, t) => a + t.minutes, 0)) * 100)} %</b> der geschätzten Zeit. Dein Tagesplan rechnet deshalb mit Faktor{' '}
+            <b>{factor.toLocaleString('de-DE')}</b>.
+          </p>
+        )}
+      </div>
+      <p className="tiny muted center">Heatmap und der Wochenbericht am Sonntag kommen noch.</p>
+    </div>
+  )
+}
+
+// ---------- Wenn-Dann-Pläne ----------
+
+const WHEN = ['ich nach dem Mittagessen aufs Handy will', 'ich eine Aufgabe vor mir herschiebe', 'ich morgens nicht aus dem Bett komme', 'ich abends noch arbeiten will', 'ich nicht weiß, womit ich anfangen soll']
+const THEN = ['starte ich den 5-Minuten-Timer', 'lege ich das Handy in einen anderen Raum', 'mache ich nur den ersten Mini-Schritt', 'stehe ich auf und trinke ein Glas Wasser', 'öffne ich die App und mache, was oben steht']
+
+export function IfThen() {
+  const rules = useStore((s) => s.data.ifThen)
+  const { addIfThen, deleteIfThen } = useStore.getState()
+  const [when, setWhen] = useState('')
+  const [then, setThen] = useState('')
+  return (
+    <div className="card col">
+      <h3>Wenn-Dann-Pläne</h3>
+      <p className="tiny muted">Leg vorher fest, was du in deinen typischen Kipp-Momenten tust. Die App zeigt dir die Regel, wenn du eine Aufgabe verschieben willst.</p>
+      {rules.map((r) => (
+        <div key={r.id} className="branch">
+          <span className="grow">
+            <b>Wenn</b> {r.when}, <b>dann</b> {r.then}.
+          </span>
+          <button className="mini" onClick={() => deleteIfThen(r.id)} aria-label="Löschen">
+            ✕
+          </button>
+        </div>
+      ))}
+      <Chips label="Wenn …" stack options={WHEN.map((v) => ({ v, label: v }))} value={when} onChange={setWhen} />
+      <input value={when} onChange={(e) => setWhen(e.target.value)} placeholder="Eigene Situation …" />
+      <Chips label="dann …" stack options={THEN.map((v) => ({ v, label: v }))} value={then} onChange={setThen} />
+      <input value={then} onChange={(e) => setThen(e.target.value)} placeholder="Eigene Reaktion …" />
+      <button
+        className="btn primary"
+        disabled={!when.trim() || !then.trim()}
+        onClick={() => {
+          addIfThen(when, then)
+          setWhen('')
+          setThen('')
+        }}
+      >
+        Regel speichern
+      </button>
     </div>
   )
 }

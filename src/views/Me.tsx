@@ -7,7 +7,7 @@ import type { AppData, StatKey } from '../lib/types'
 import { Chips } from '../ui'
 import { TrainingEditor } from './Onboarding'
 import { XpBar } from './Now'
-import { Shop, Stats } from './Extras'
+import { IfThen, Shop, Stats } from './Extras'
 
 type Sec = 'char' | 'shop' | 'stats' | 'set'
 const SECS: [Sec, string][] = [
@@ -113,6 +113,8 @@ export function Me() {
         <div className="card col">
           <Chips label="Länge einer Fokus-Session" options={[15, 25, 45, 50].map((v) => ({ v, label: `${v} Min` }))} value={data.settings.focusMinutes} onChange={(v) => setBusiness({ focusMinutes: v })} />
         </div>
+
+        <IfThen />
 
         <div className="card col">
           <h3>Rhythmus</h3>

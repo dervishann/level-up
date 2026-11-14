@@ -247,6 +247,8 @@ export interface AppData {
   clientCards: ClientCard[]
   recurring: Recurring[]
   taxDates: TaxDate[]
+  /** Wenn-Dann-Pläne für typische Problemsituationen */
+  ifThen: { id: string; when: string; then: string }[]
   purchases: Purchase[]
   /** vorrätige Streak-Freezes */
   freezes: number

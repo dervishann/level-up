@@ -5,6 +5,8 @@ import type { MapCard, ZoneId } from '../lib/types'
 import type { Modal } from '../App'
 import { Overlay, Progress, Sheet, ZoneBadge, buzz, zoneStyle } from '../ui'
 import { GoalsSection } from './Goals'
+import { neglectedZones } from '../lib/planner'
+import { dateKey } from '../lib/date'
 
 // ---------- Interview: eine Frage pro Screen ----------
 
@@ -370,6 +372,12 @@ export function MapView({ open }: { open: (m: Modal) => void }) {
             </button>
           )}
         </div>
+
+        {neglectedZones(data.tasks, data.zonesDone, data.profile.startDate, dateKey()).map((n) => (
+          <div key={n.zone} className="notice narrow" style={zoneStyle(n.zone as ZoneId)}>
+            <b style={{ color: 'var(--zone)' }}>Zone {n.zone} · {zoneOf(n.zone as ZoneId).name}</b>: seit {n.days} Tagen keine Quest erledigt. Kipp eine kleine Aufgabe dafür in die Inbox, damit der Bereich nicht hinten runterfällt.
+          </div>
+        ))}
 
         {showCanvas && <Canvas onPick={setPicked} />}
 

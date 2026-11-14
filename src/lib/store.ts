@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { AppData, ClientCard, ContentCard, DayLog, Daily, GoalNode, Level3, Recurring, Reward, StatKey, Task, Training, ZoneId } from './types'
 import { addDays, dateKey, nowMin, toMin, uid, weekdayOf } from './date'
-import { buildDayPlan } from './planner'
+import { buildDayPlan, estimateFactor } from './planner'
 import { coinsFor, FREEZE_COST, levelInfo, taskXp, XP, ZONE_STAT } from './xp'
 import { activeCount, clientStep, contentStep, invoiceStep, isOverdue, LAST_STAGE, nextWeekday, reminderStep, taxStep, weekStart, type StepSpec } from './pipelines'
 import { suggestKind, suggestSteps, suggestZone } from './suggest'
@@ -39,6 +39,7 @@ export const freshData = (): AppData => ({
   clientCards: [],
   recurring: DEFAULT_RECURRING,
   taxDates: [],
+  ifThen: [],
   purchases: [],
   freezes: 0,
   zonesDone: [],
@@ -133,6 +134,8 @@ interface Store {
   addReward: (title: string, cost: number) => void
   deleteReward: (id: string) => void
   buyFreeze: () => boolean
+  addIfThen: (when: string, then: string) => void
+  deleteIfThen: (id: string) => void
   phoneAway: () => void
   setTheme: (t: 'dark' | 'light') => void
   updateProfile: (p: Partial<AppData['profile']>) => void
@@ -158,6 +161,7 @@ function buildPlan(d: AppData, date: string, fromNow: boolean) {
     tasks: d.tasks.filter((t) => t.status === 'open' && t.date !== undefined && t.date <= date),
     minimal: log?.minimal,
     mainsDone: log?.mainsDone,
+    estimateFactor: estimateFactor(d.tasks),
     fromMin: fromNow ? nowMin() : undefined,
     doneBlockIds: log?.blocksDone,
     builtAt: Date.now(),
@@ -926,6 +930,9 @@ export const useStore = create<Store>()(
           })
           return true
         },
+
+        addIfThen: (when, then) => mutate((d) => void d.ifThen.push({ id: uid(), when: when.trim(), then: then.trim() })),
+        deleteIfThen: (id) => mutate((d) => void (d.ifThen = d.ifThen.filter((r) => r.id !== id))),
 
         phoneAway: () => mutate(() => ({ xp: XP.phoneAway, label: 'Handy ist weg', stat: 'disziplin' })),
 
