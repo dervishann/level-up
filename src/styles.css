@@ -185,3 +185,24 @@ textarea { resize: none; min-height: 110px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Desktop-Canvas der Lebens-Karte ---------- */
+.canvas { position: relative; height: min(78vh, 860px); border-radius: 24px; border: 1px solid var(--line); overflow: hidden; cursor: grab; touch-action: none; user-select: none;
+  background-color: var(--bg2); background-image: radial-gradient(var(--line) 1.2px, transparent 1.2px); background-size: 24px 24px; }
+.canvas:active { cursor: grabbing; }
+.world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+.links { position: absolute; left: -1100px; top: -1100px; overflow: visible; pointer-events: none; }
+.node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.node.core { left: 0; top: 0; width: 150px; height: 150px; border-radius: 50%; justify-content: center; background: var(--card); border: 3px solid var(--text); font-size: 18px; }
+.node.zone { width: 190px; font-size: 17px; padding: 12px 10px; border-radius: 18px; background: var(--card); border: 2px solid var(--zone); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
+.node.zone i { width: 46px; height: 46px; border-radius: 50%; background: var(--zone); color: #fff; font-style: normal; font-weight: 800; font-size: 20px; display: grid; place-items: center; }
+.node.zone span { color: var(--muted); }
+.node.zone.fog { border-color: var(--line); border-style: dashed; opacity: 0.6; }
+.node.zone.fog i { background: var(--card2); color: var(--muted); }
+.node.zone:hover, .node.box:hover { filter: brightness(1.12); }
+.node.box { width: 250px; align-items: stretch; gap: 6px; padding: 10px; border-radius: 16px; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid color-mix(in srgb, var(--zone) 50%, var(--line)); }
+.leaf { text-align: left; font-size: 15px; line-height: 1.3; padding: 7px 9px; border-radius: 9px; background: var(--card2); border-left: 3px solid var(--zone); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.leaf.sticky { background: #fde68a; color: #3b2f05; border-left-color: #f59e0b; }
+.zoom { position: absolute; right: 14px; top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.zoom button { width: 44px; height: 44px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 20px; }
+.canvas-hint { position: absolute; left: 16px; bottom: 14px; pointer-events: none; }

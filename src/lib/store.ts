@@ -5,6 +5,7 @@ import { addDays, dateKey, nowMin, toMin, uid, weekdayOf } from './date'
 import { buildDayPlan } from './planner'
 import { coinsFor, levelInfo, taskXp, XP, ZONE_STAT } from './xp'
 import { suggestKind, suggestSteps, suggestZone } from './suggest'
+import { ZONE_ORDER, zone as zoneInfo } from './zones'
 import { childrenOf, nextActionable, propagateDone, subtree, type NodeDraft } from './goals'
 
 export const emptyDay = (): DayLog => ({ dailiesDone: [], blocksDone: [], xp: 0, mainsDone: 0 })
@@ -222,6 +223,25 @@ function finishTask(d: AppData, t: Task): { xp: number; label: string; stat?: St
   return { xp: xp.total + bonus, label, stat: t.kind === 'deep' && t.zone !== 7 ? (isMain ? ZONE_STAT[t.zone] : 'fokus') : ZONE_STAT[t.zone] }
 }
 
+const zoneQuestPrefix = (id: ZoneId) => `Zone ${id} erkunden`
+
+/** Die nächste Zone, die noch im Nebel liegt (in der Reihenfolge ZONE_ORDER). */
+export const nextZone = (zonesDone: ZoneId[]): ZoneId | undefined => ZONE_ORDER.find((z) => !zonesDone.includes(z))
+
+/** Eine Zone ist betretbar, wenn sie erkundet ist oder ihre Quest schon freigeschaltet wurde. */
+export const zoneUnlocked = (d: AppData, id: ZoneId): boolean =>
+  id === 1 || d.zonesDone.includes(id) || d.tasks.some((t) => t.title.startsWith(zoneQuestPrefix(id)))
+
+/** Legt die Quest für die nächste Zone an, falls es noch keine offene Zonen-Quest gibt (max. 1 neue Zone pro Tag). */
+function ensureZoneQuest(d: AppData, date: string) {
+  const next = nextZone(d.zonesDone)
+  if (!next || !d.zonesDone.includes(1)) return
+  if (d.tasks.some((t) => t.status === 'open' && /^Zone \d erkunden/.test(t.title))) return
+  const q = makeTask({ title: `${zoneQuestPrefix(next)}: ${zoneInfo(next).short}-Interview`, zone: next, minutes: 10, kind: 'deep', priority: 3, dread: 1, date })
+  q.steps = ['Auf „Interview starten“ tippen', 'Fragen beantworten (Antippen reicht)', 'Vorschläge am Ende bestätigen']
+  d.tasks.push(q)
+}
+
 let fxCounter = 0
 
 export const useStore = create<Store>()(
@@ -292,6 +312,7 @@ export const useStore = create<Store>()(
               // alte Pläne aufräumen (30 Tage reichen)
               const cutoff = addDays(today, -30)
               for (const k of Object.keys(d.plans)) if (k < cutoff) delete d.plans[k]
+              ensureZoneQuest(d, today)
               d.lastDate = today
             }
             day(d, today)
@@ -509,11 +530,7 @@ export const useStore = create<Store>()(
               }
             }
             // Nächste Zone als Quest für morgen freischalten (max. 1 pro Tag).
-            if (zone === 1 && !d.zonesDone.includes(8) && !d.tasks.some((t) => t.title.startsWith('Zone 8 erkunden'))) {
-              const q = makeTask({ title: 'Zone 8 erkunden: Alltag-Interview', zone: 8, minutes: 10, kind: 'deep', priority: 3, dread: 1, date: addDays(today, 1) })
-              q.steps = ['Unten auf „Karte“ tippen', 'Zone 8 antippen', 'Fragen beantworten (Antippen reicht)']
-              d.tasks.push(q)
-            }
+            ensureZoneQuest(d, addDays(today, 1))
             rebuildToday(d)
             if (first) return { xp: XP.zoneComplete, label: 'Zone komplett erkundet!', stat: 'klarheit' }
           }),

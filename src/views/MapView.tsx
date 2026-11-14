@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '../lib/store'
-import { INTERVIEWS, ZONES, zone as zoneOf, type Derive, type Question } from '../lib/zones'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useStore, zoneUnlocked } from '../lib/store'
+import { INTERVIEWS, ZONE_ORDER, ZONES, zone as zoneOf, type Derive, type Question } from '../lib/zones'
 import type { MapCard, ZoneId } from '../lib/types'
 import type { Modal } from '../App'
 import { Overlay, Progress, Sheet, ZoneBadge, buzz, zoneStyle } from '../ui'
@@ -130,96 +130,281 @@ export function Interview({ zone, onClose }: { zone: ZoneId; onClose: () => void
 
 // ---------- Lebens-Karte ----------
 
+type EditTarget = MapCard | { zone: ZoneId; id: null; text: string }
+
+const usePct = () => {
+  const cards = useStore((s) => s.data.cards)
+  return (id: ZoneId) => {
+    const qs = INTERVIEWS[id]
+    if (!qs) return 0
+    return Math.round((qs.filter((q) => cards.some((c) => c.questionId === q.id)).length / qs.length) * 100)
+  }
+}
+
+const fogText = (id: ZoneId, zonesDone: ZoneId[]): string => {
+  const before = ZONE_ORDER[ZONE_ORDER.indexOf(id) - 1]
+  if (before === undefined || zonesDone.includes(before)) return 'Im Nebel · wird morgen als Quest freigeschaltet'
+  return `Im Nebel · kommt nach Zone ${before} (${zoneOf(before).short})`
+}
+
+/** Inhalt einer geöffneten Zone: Äste, Interview-Knopf, Ast hinzufügen. */
+function ZoneDetail({ id, open, onEdit }: { id: ZoneId; open: (m: Modal) => void; onEdit: (c: EditTarget) => void }) {
+  const cards = useStore((s) => s.data.cards).filter((c) => c.zone === id)
+  const p = usePct()(id)
+  return (
+    <>
+      {(INTERVIEWS[id] ?? []).map((q) => {
+        const mine = cards.filter((c) => c.questionId === q.id)
+        if (!mine.length) return null
+        return (
+          <div key={q.id} className="col" style={{ gap: 6 }}>
+            <span className="tiny muted">{q.text}</span>
+            {mine.map((c) => (
+              <button key={c.id} className={'branch' + (q.id === 'v6' ? ' sticky' : '')} style={{ textAlign: 'left' }} onClick={() => onEdit(c)}>
+                {c.text}
+              </button>
+            ))}
+          </div>
+        )
+      })}
+      {cards
+        .filter((c) => !c.questionId)
+        .map((c) => (
+          <button key={c.id} className="branch" style={{ textAlign: 'left' }} onClick={() => onEdit(c)}>
+            {c.text}
+          </button>
+        ))}
+      <div className="row">
+        <button className="btn sm primary" onClick={() => open({ k: 'interview', zone: id })}>
+          {p === 0 ? 'Interview starten' : p < 100 ? 'Interview fortsetzen' : 'Antworten überarbeiten'}
+        </button>
+        <button className="btn sm" onClick={() => onEdit({ zone: id, id: null, text: '' })}>
+          + Ast
+        </button>
+      </div>
+    </>
+  )
+}
+
+// ---------- Desktop: große Canvas zum Zoomen und Verschieben ----------
+
+const R_ZONE = 300
+const R_BOX = 590
+const pos = (i: number, r: number) => {
+  const a = ((-90 + i * 45) * Math.PI) / 180
+  // Ellipse statt Kreis: nutzt den breiten Bildschirm besser aus
+  return { x: Math.cos(a) * r * 1.45, y: Math.sin(a) * r * 0.8 }
+}
+
+function Canvas({ onPick }: { onPick: (id: ZoneId) => void }) {
+  const data = useStore((s) => s.data)
+  const pct = usePct()
+  const ref = useRef<HTMLDivElement>(null)
+  const [view, setView] = useState({ x: 0, y: 0, k: 0.5 })
+  const drag = useRef<{ px: number; py: number; vx: number; vy: number; moving: boolean } | null>(null)
+  const total = Math.round(ZONES.reduce((s, z) => s + pct(z.id), 0) / ZONES.length)
+
+  // all = true: alles inklusive Äste zeigen; sonst so nah, dass die Zonen gut lesbar sind
+  const fit = (all: boolean) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    const [w, h] = all ? [2000, 1200] : [1500, 860]
+    setView({ x: r.width / 2, y: r.height / 2, k: Math.max(0.3, Math.min(r.width / w, r.height / h)) })
+  }
+  useLayoutEffect(() => fit(false), [])
+
+  const zoomAt = (cx: number, cy: number, factor: number) =>
+    setView((v) => {
+      const k = Math.max(0.25, Math.min(2.2, v.k * factor))
+      const f = k / v.k
+      return { k, x: cx - (cx - v.x) * f, y: cy - (cy - v.y) * f }
+    })
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const r = el.getBoundingClientRect()
+      zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015))
+    }
+    el.addEventListener('wheel', wheel, { passive: false })
+    return () => el.removeEventListener('wheel', wheel)
+  }, [])
+
+  const center = () => {
+    const r = ref.current!.getBoundingClientRect()
+    return [r.width / 2, r.height / 2] as const
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="canvas"
+      onPointerDown={(e) => (drag.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moving: false })}
+      onPointerMove={(e) => {
+        const d = drag.current
+        if (!d) return
+        const dx = e.clientX - d.px
+        const dy = e.clientY - d.py
+        if (!d.moving && Math.hypot(dx, dy) < 5) return
+        if (!d.moving) {
+          d.moving = true
+          ref.current?.setPointerCapture(e.pointerId)
+        }
+        setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
+      }}
+      onPointerUp={() => (drag.current = null)}
+      onPointerCancel={() => (drag.current = null)}
+    >
+      <div className="world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
+        <svg className="links" viewBox="-1100 -1100 2200 2200" width={2200} height={2200}>
+          {ZONES.map((z, i) => {
+            const a = pos(i, R_ZONE)
+            const b = pos(i, R_BOX)
+            const can = zoneUnlocked(data, z.id)
+            const has = data.cards.some((c) => c.zone === z.id)
+            return (
+              <g key={z.id} stroke={can ? z.color : 'var(--line)'} strokeWidth={3} fill="none" strokeLinecap="round">
+                <path d={`M0 0 L${a.x} ${a.y}`} strokeDasharray={can ? undefined : '4 10'} />
+                {can && has && <path d={`M${a.x} ${a.y} L${b.x} ${b.y}`} opacity={0.6} />}
+              </g>
+            )
+          })}
+        </svg>
+
+        <div className="node core">
+          <b>{data.profile.name}</b>
+          <span className="tiny">{total} % erkundet</span>
+        </div>
+
+        {ZONES.map((z, i) => {
+          const a = pos(i, R_ZONE)
+          const b = pos(i, R_BOX)
+          const can = zoneUnlocked(data, z.id)
+          const cards = data.cards.filter((c) => c.zone === z.id)
+          const p = pct(z.id)
+          return (
+            <div key={z.id} style={zoneStyle(z.id)}>
+              <button className={'node zone' + (can ? '' : ' fog')} style={{ left: a.x, top: a.y }} onClick={() => onPick(z.id)}>
+                <i>{can ? z.id : '?'}</i>
+                <b>{z.name}</b>
+                <span className="tiny">{can ? `${p} %` : 'Im Nebel'}</span>
+              </button>
+              {can && cards.length > 0 && (
+                <button className="node box" style={{ left: b.x, top: b.y }} onClick={() => onPick(z.id)}>
+                  {cards.slice(0, 5).map((c) => (
+                    <span key={c.id} className={'leaf' + (c.questionId === 'v6' ? ' sticky' : '')}>
+                      {c.text}
+                    </span>
+                  ))}
+                  {cards.length > 5 && <span className="tiny muted">+ {cards.length - 5} weitere</span>}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="zoom" onPointerDown={(e) => e.stopPropagation()}>
+        <button onClick={() => zoomAt(...center(), 1.25)} aria-label="Vergrößern">
+          +
+        </button>
+        <button onClick={() => zoomAt(...center(), 0.8)} aria-label="Verkleinern">
+          −
+        </button>
+        <button onClick={() => fit(true)} aria-label="Alles zeigen">
+          ⤢
+        </button>
+      </div>
+      <span className="canvas-hint tiny muted">Ziehen zum Verschieben · Mausrad zum Zoomen · Zone anklicken</span>
+    </div>
+  )
+}
+
+const useWide = () => {
+  const [wide, setWide] = useState(() => window.matchMedia('(min-width: 900px)').matches)
+  useEffect(() => {
+    const m = window.matchMedia('(min-width: 900px)')
+    const on = () => setWide(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [])
+  return wide
+}
+
 export function MapView({ open }: { open: (m: Modal) => void }) {
   const data = useStore((s) => s.data)
   const { editCard, deleteCard, addCard } = useStore.getState()
+  const pct = usePct()
+  const wide = useWide()
+  const [asList, setAsList] = useState(false)
   const [openZone, setOpenZone] = useState<ZoneId | null>(1)
-  const [edit, setEdit] = useState<MapCard | { zone: ZoneId; id: null; text: string } | null>(null)
+  const [picked, setPicked] = useState<ZoneId | null>(null)
+  const [edit, setEdit] = useState<EditTarget | null>(null)
   const [text, setText] = useState('')
-
-  const pct = (id: ZoneId) => {
-    const qs = INTERVIEWS[id]
-    if (!qs) return 0
-    const answered = qs.filter((q) => data.cards.some((c) => c.questionId === q.id)).length
-    return Math.round((answered / qs.length) * 100)
-  }
-  const playable = (id: ZoneId) => !!INTERVIEWS[id] && (id === 1 || data.zonesDone.includes(1))
   const total = Math.round(ZONES.reduce((s, z) => s + pct(z.id), 0) / ZONES.length)
+  const showCanvas = wide && !asList
 
-  const startEdit = (c: MapCard | { zone: ZoneId; id: null; text: string }) => {
+  const startEdit = (c: EditTarget) => {
+    setPicked(null)
     setEdit(c)
     setText(c.text)
+  }
+  const openModal = (m: Modal) => {
+    setPicked(null)
+    open(m)
   }
 
   return (
     <div className="screen">
       <div className="col gap-l">
-        <div className="narrow">
-          <h1>Lebens-Karte</h1>
-          <p className="muted small">{total} % deiner Welt erkundet. Jede Zone, die du freilegst, gibt deinen Quests ein Warum.</p>
+        <div className="narrow row between">
+          <div>
+            <h1>Lebens-Karte</h1>
+            <p className="muted small">{total} % deiner Welt erkundet. Jede Zone, die du freilegst, gibt deinen Quests ein Warum.</p>
+          </div>
+          {wide && (
+            <button className="btn sm" onClick={() => setAsList(!asList)}>
+              {asList ? 'Als Karte' : 'Als Liste'}
+            </button>
+          )}
         </div>
+
+        {showCanvas && <Canvas onPick={setPicked} />}
 
         <GoalsSection open={open} />
 
-        <div className="map-grid">
-          {ZONES.map((z) => {
-            const p = pct(z.id)
-            const can = playable(z.id)
-            const cards = data.cards.filter((c) => c.zone === z.id)
-            const isOpen = openZone === z.id && can
-            return (
-              <div key={z.id} className={'card zone-card col' + (can ? '' : ' fog')} style={zoneStyle(z.id)}>
-                <button className="row" style={{ textAlign: 'left', width: '100%' }} onClick={() => can && setOpenZone(isOpen ? null : z.id)}>
-                  <span className="zbadge">
-                    <i style={{ width: 34, height: 34, fontSize: 16 }}>{z.id}</i>
-                  </span>
-                  <span className="grow">
-                    <b>{z.name}</b>
-                    <br />
-                    <span className="muted small">{can ? z.desc : INTERVIEWS[z.id] ? 'Im Nebel · erst Zone 1 erkunden' : 'Im Nebel · wird in den nächsten Tagen freigeschaltet'}</span>
-                  </span>
-                  {can && <span className="num small muted">{p} %</span>}
-                </button>
-                {can && (
-                  <div className="bar">
-                    <div style={{ width: `${p}%` }} />
-                  </div>
-                )}
-                {isOpen && (
-                  <>
-                    {(INTERVIEWS[z.id] ?? []).map((q) => {
-                      const mine = cards.filter((c) => c.questionId === q.id)
-                      if (!mine.length) return null
-                      return (
-                        <div key={q.id} className="col" style={{ gap: 6 }}>
-                          <span className="tiny muted">{q.text}</span>
-                          {mine.map((c) => (
-                            <button key={c.id} className={'branch' + (q.id === 'v6' ? ' sticky' : '')} style={{ textAlign: 'left' }} onClick={() => startEdit(c)}>
-                              {c.text}
-                            </button>
-                          ))}
-                        </div>
-                      )
-                    })}
-                    {cards.filter((c) => !c.questionId).map((c) => (
-                      <button key={c.id} className="branch" style={{ textAlign: 'left' }} onClick={() => startEdit(c)}>
-                        {c.text}
-                      </button>
-                    ))}
-                    <div className="row">
-                      <button className="btn sm primary" onClick={() => open({ k: 'interview', zone: z.id })}>
-                        {p === 0 ? 'Interview starten' : p < 100 ? 'Interview fortsetzen' : 'Antworten überarbeiten'}
-                      </button>
-                      <button className="btn sm" onClick={() => startEdit({ zone: z.id, id: null, text: '' })}>
-                        + Ast
-                      </button>
+        {!showCanvas && (
+          <div className="map-grid">
+            {ZONES.map((z) => {
+              const p = pct(z.id)
+              const can = zoneUnlocked(data, z.id)
+              const isOpen = openZone === z.id && can
+              return (
+                <div key={z.id} className={'card zone-card col' + (can ? '' : ' fog')} style={zoneStyle(z.id)}>
+                  <button className="row" style={{ textAlign: 'left', width: '100%' }} onClick={() => can && setOpenZone(isOpen ? null : z.id)}>
+                    <span className="zbadge">
+                      <i style={{ width: 34, height: 34, fontSize: 16 }}>{z.id}</i>
+                    </span>
+                    <span className="grow">
+                      <b>{z.name}</b>
+                      <br />
+                      <span className="muted small">{can ? z.desc : fogText(z.id, data.zonesDone)}</span>
+                    </span>
+                    {can && <span className="num small muted">{p} %</span>}
+                  </button>
+                  {can && (
+                    <div className="bar">
+                      <div style={{ width: `${p}%` }} />
                     </div>
-                  </>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                  )}
+                  {isOpen && <ZoneDetail id={z.id} open={open} onEdit={startEdit} />}
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {data.ideas.length > 0 && (
           <div className="narrow col" style={{ gap: 8 }}>
@@ -232,6 +417,25 @@ export function MapView({ open }: { open: (m: Modal) => void }) {
           </div>
         )}
       </div>
+
+      {picked && (
+        <Sheet onClose={() => setPicked(null)} zoneId={picked}>
+          <div className="row between">
+            <ZoneBadge id={picked} />
+            <button className="x" onClick={() => setPicked(null)} aria-label="Schließen">
+              ✕
+            </button>
+          </div>
+          {zoneUnlocked(data, picked) ? (
+            <>
+              <p className="muted small">{zoneOf(picked).desc}</p>
+              <ZoneDetail id={picked} open={openModal} onEdit={startEdit} />
+            </>
+          ) : (
+            <p className="muted">{fogText(picked, data.zonesDone)}. Es kommt höchstens eine neue Zone pro Tag dazu, damit dich die Karte nicht erschlägt.</p>
+          )}
+        </Sheet>
+      )}
 
       {edit && (
         <Sheet onClose={() => setEdit(null)} zoneId={edit.zone}>
