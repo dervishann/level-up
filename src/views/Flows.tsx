@@ -432,8 +432,11 @@ const mmss = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:
 export function Timer({ taskId, minutes, onClose }: { taskId: string; minutes: number; onClose: () => void }) {
   const task = useStore((s) => s.data.tasks.find((t) => t.id === taskId))
   const focusMinutes = useStore((s) => s.data.settings.focusMinutes)
-  const { addWork, completeTask, stepDone } = useStore.getState()
-  const [startedAt] = useState(() => Date.now())
+  const { addWork, completeTask, stepDone, phoneAway } = useStore.getState()
+  const [startedAt, setStartedAt] = useState(() => Date.now())
+  // Vor Deep-Work-Blöcken: optionale Vor-Quest "Handy weg"
+  const [prep, setPrep] = useState(() => minutes >= 15 && useStore.getState().data.tasks.find((t) => t.id === taskId)?.kind === 'deep')
+  const sessionDone = useRef(false)
   const [endsAt, setEndsAt] = useState(() => Date.now() + minutes * 60000)
   const [, tick] = useState(0)
   const rang = useRef(false)
@@ -445,19 +448,46 @@ export function Timer({ taskId, minutes, onClose }: { taskId: string; minutes: n
 
   const left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
   const over = left === 0
-  if (over && !rang.current) {
+  if (over && !rang.current && !prep) {
     rang.current = true
+    sessionDone.current = true
     buzz([200, 100, 200])
   }
 
   const stop = (done: boolean) => {
     const worked = Math.max(1, Math.round((Math.min(Date.now(), endsAt) - startedAt) / 60000))
-    addWork(taskId, worked)
+    addWork(taskId, worked, sessionDone.current)
     if (done) completeTask(taskId)
     onClose()
   }
 
   if (!task) return null
+
+  if (prep) {
+    const go = (away: boolean) => {
+      if (away) phoneAway()
+      setStartedAt(Date.now())
+      setEndsAt(Date.now() + minutes * 60000)
+      setPrep(false)
+    }
+    return (
+      <Overlay zoneId={task.zone}>
+        <div className="col center" style={{ marginTop: 60 }}>
+          <div style={{ fontSize: 64 }}>📵</div>
+          <h1>Erst das Handy weg.</h1>
+          <p className="muted">Leg es in einen anderen Raum oder stell „Nicht stören“ an. Dann {minutes} Minuten nur diese eine Sache.</p>
+        </div>
+        <div className="foot">
+          <button className="btn primary big" onClick={() => go(true)}>
+            Handy ist weg · Start
+          </button>
+          <button className="btn ghost" onClick={() => go(false)}>
+            Ohne das starten
+          </button>
+        </div>
+      </Overlay>
+    )
+  }
   const step = task.steps[Math.min(task.stepsDone, task.steps.length - 1)]
   const hasMoreSteps = task.stepsDone < task.steps.length - 1
 

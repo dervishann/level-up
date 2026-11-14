@@ -22,6 +22,8 @@ export const XP = {
   comeback: 25,
   inboxSorted: 2,
   nodeClear: 3,
+  focusSession: 10,
+  phoneAway: 3,
   goalDone: 100,
 }
 
@@ -79,6 +81,9 @@ export const titleFor = (level: number): string => {
   for (const [min, name] of TITLES) if (level >= min) t = name
   return t
 }
+
+/** Preis eines Streak-Freeze im Shop (max. 1 pro Woche) */
+export const FREEZE_COST = 50
 
 /** 1 Coin pro 10 XP */
 export const coinsFor = (xp: number): number => Math.round(xp / 10)

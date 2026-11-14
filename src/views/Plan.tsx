@@ -3,6 +3,7 @@ import { todayLog, useStore } from '../lib/store'
 import { currentBlock } from '../lib/planner'
 import { addDays, dateKey, fmt } from '../lib/date'
 import type { Block } from '../lib/types'
+import { planToIcs } from '../lib/ics'
 import type { Modal } from '../App'
 import { buzz, zoneStyle } from '../ui'
 
@@ -26,6 +27,27 @@ export function Plan({ open }: { open: (m: Modal) => void }) {
     if (b.id === 'routine-morning' && !log.checkinDone) return open({ k: 'checkin' })
     if (b.taskId) return completeTask(b.taskId)
     doneBlock(b.id)
+  }
+
+  // Tagesplan (heute + morgen, falls schon geplant) als .ics-Datei: teilen auf dem Handy, Download am Laptop.
+  const exportCalendar = async () => {
+    const now = new Date().getHours() * 60 + new Date().getMinutes()
+    const plans = [plan && { ...plan, blocks: plan.blocks.filter((b) => !log.blocksDone.includes(b.id) && b.end > now) }, data.plans[tomorrow]].filter((p): p is NonNullable<typeof p> => !!p)
+    const file = new File([planToIcs(plans)], `level-up-${today}.ics`, { type: 'text/calendar' })
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Level Up Tagesplan' })
+        return setMsg('Wähle im Teilen-Menü „Kalender“, um die Termine zu übernehmen.')
+      }
+    } catch {
+      return // Teilen abgebrochen
+    }
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(file)
+    a.download = file.name
+    a.click()
+    URL.revokeObjectURL(a.href)
+    setMsg('Datei geladen. Ein Doppelklick öffnet sie in deinem Kalender.')
   }
 
   const when = (d?: string) => (!d ? 'irgendwann' : d <= today ? 'heute, nicht eingeplant' : d === tomorrow ? 'morgen' : d)
@@ -75,6 +97,10 @@ export function Plan({ open }: { open: (m: Modal) => void }) {
             )
           })}
         </div>
+
+        <button className="btn" onClick={exportCalendar}>
+          In meinen Kalender exportieren
+        </button>
 
         <button
           className="btn"

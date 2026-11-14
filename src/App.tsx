@@ -8,6 +8,7 @@ import { Plan } from './views/Plan'
 import { Interview, MapView } from './views/MapView'
 import { Me } from './views/Me'
 import { Breakdown } from './views/Goals'
+import { Business } from './views/Business'
 import { Checkin, InboxSheet, LaterSheet, Panic, Shutdown, SortOverlay, Timer } from './views/Flows'
 
 export type Modal =
@@ -22,10 +23,11 @@ export type Modal =
   | { k: 'later'; taskId: string }
   | { k: 'breakdown'; goalId: string }
 
-type Tab = 'now' | 'plan' | 'map' | 'me'
+type Tab = 'now' | 'plan' | 'biz' | 'map' | 'me'
 const TABS: { id: Tab; ico: string; label: string }[] = [
   { id: 'now', ico: '⚡', label: 'Jetzt' },
   { id: 'plan', ico: '🗓️', label: 'Plan' },
+  { id: 'biz', ico: '💼', label: 'Business' },
   { id: 'map', ico: '🗺️', label: 'Karte' },
   { id: 'me', ico: '🛡️', label: 'Ich' },
 ]
@@ -36,10 +38,12 @@ function Feedback() {
   const fx = useStore((s) => s.fx)
   const clearFx = useStore((s) => s.clearFx)
   const [level, setLevel] = useState<{ n: number; title: string } | null>(null)
+  const [loot, setLoot] = useState<{ id: number; text: string } | null>(null)
 
   useEffect(() => {
     if (!fx) return
     if (fx.levelUp) setLevel({ n: fx.levelUp, title: fx.title ?? '' })
+    if (fx.loot) setLoot({ id: fx.id, text: fx.loot.coins ? `+${fx.loot.coins} Coins` : `+${fx.loot.xp} XP` })
     const t = setTimeout(clearFx, 2200)
     return () => clearTimeout(t)
   }, [fx, clearFx])
@@ -60,6 +64,13 @@ function Feedback() {
       {fx && (
         <div className="toast" key={fx.id}>
           <span>+{fx.xp} XP</span> · {fx.label}
+        </div>
+      )}
+      {loot && (
+        <div className="loot" key={loot.id} onAnimationEnd={(e) => e.target === e.currentTarget && setLoot(null)}>
+          <div className="chest">🎁</div>
+          <b>Loot-Truhe!</b>
+          <span>{loot.text}</span>
         </div>
       )}
       {level && (
@@ -128,6 +139,7 @@ export default function App() {
     <div className="app">
       {tab === 'now' && <Now open={setModal} />}
       {tab === 'plan' && <Plan open={setModal} />}
+      {tab === 'biz' && <Business />}
       {tab === 'map' && <MapView open={setModal} />}
       {tab === 'me' && <Me />}
 

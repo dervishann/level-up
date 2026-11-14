@@ -33,7 +33,7 @@ export function demoData(): AppData {
       { id: 'r1', type: 'ringen', weekday: (wd + 1) % 7, time: '19:00', minutes: 90 },
     ],
     postGoal: 3,
-    clients: ['Studio Nord', 'Café Mila'],
+    clients: [],
     onboarded: true,
     startDate: addDays(today, -6),
   }
@@ -71,6 +71,19 @@ export function demoData(): AppData {
     { id: uid(), zone: 1, questionId: 'v5', text: 'Handy und Social Media' },
     { id: uid(), zone: 1, questionId: 'v6', text: 'Einen Podcast starten' },
   ]
+  const day = 86400000
+  d.content = [
+    { id: uid(), title: 'Niemand sagt dir das über Selbstständigkeit', stage: 0, active: false, createdAt: Date.now() },
+    { id: uid(), title: '3 Fehler am Anfang', stage: 1, active: true, createdAt: Date.now() },
+    { id: uid(), title: 'Mein Morgen als Selbstständiger', stage: 1, active: true, createdAt: Date.now() },
+    { id: uid(), title: 'Gewerbe anmelden in 60 Sekunden', stage: 4, active: false, createdAt: Date.now() - 3 * day, postedAt: Date.now() },
+  ]
+  d.clientCards = [
+    { id: uid(), name: 'Fitnessstudio Kraftwerk', stage: 0, amount: 1200, createdAt: Date.now() },
+    { id: uid(), name: 'Café Mila', stage: 1, amount: 800, createdAt: Date.now() },
+    { id: uid(), name: 'Studio Nord', stage: 3, amount: 1500, invoiceDate: addDays(today, -20), createdAt: Date.now() - 30 * day },
+  ]
+  d.settings.shootDay = (wd + 2) % 7
   d.nodes = []
   d.goals = [
     { id: uid(), zone: 1, title: '10 zahlende Kunden gleichzeitig' },

@@ -7,12 +7,22 @@ import type { AppData, StatKey } from '../lib/types'
 import { Chips } from '../ui'
 import { TrainingEditor } from './Onboarding'
 import { XpBar } from './Now'
+import { Shop, Stats } from './Extras'
+
+type Sec = 'char' | 'shop' | 'stats' | 'set'
+const SECS: [Sec, string][] = [
+  ['char', 'Charakter'],
+  ['shop', 'Shop'],
+  ['stats', 'Statistik'],
+  ['set', 'Einstellungen'],
+]
 
 const STAT_COLOR: Record<StatKey, string> = { fokus: '#8b5cf6', staerke: '#ef4444', business: '#3b82f6', reichweite: '#06b6d4', disziplin: '#eab308', klarheit: '#ec4899' }
 
 export function Me() {
   const data = useStore((s) => s.data)
-  const { setTheme, updateProfile, markBackup, importData, reset, ensureToday } = useStore.getState()
+  const { setTheme, updateProfile, markBackup, importData, reset, ensureToday, setBusiness } = useStore.getState()
+  const [sec, setSec] = useState<Sec>('char')
   const file = useRef<HTMLInputElement>(null)
   const [msg, setMsg] = useState('')
   const [showFormula, setShowFormula] = useState(false)
@@ -69,6 +79,18 @@ export function Me() {
           </div>
         </div>
 
+        <div className="seg">
+          {SECS.map(([id, label]) => (
+            <button key={id} className={sec === id ? 'on' : ''} onClick={() => setSec(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {sec === 'shop' && <Shop />}
+        {sec === 'stats' && <Stats />}
+
+        {sec === 'char' && (
         <div className="card col">
           <h3>Stats</h3>
           {(Object.keys(STAT_LABEL) as StatKey[]).map((k) => (
@@ -82,6 +104,14 @@ export function Me() {
               </div>
             </div>
           ))}
+        </div>
+
+        )}
+
+        {sec === 'set' && (
+        <>
+        <div className="card col">
+          <Chips label="Länge einer Fokus-Session" options={[15, 25, 45, 50].map((v) => ({ v, label: `${v} Min` }))} value={data.settings.focusMinutes} onChange={(v) => setBusiness({ focusMinutes: v })} />
         </div>
 
         <div className="card col">
@@ -108,7 +138,8 @@ export function Me() {
               <p className="muted">Schwierigkeit: leicht ×1 · mittel ×1,25 · schwer ×1,5</p>
               <p className="muted">Keinen Bock: geht klar ×1 · ungern ×1,3 · schiebe ich ewig ×1,6</p>
               <p className="muted">Boni: Main Quest +10 · Frosch (unangenehmste Main Quest zuerst) +15 · Streak +1 % pro Tag (max. 20 %) · Comeback +25</p>
-              <p className="muted">Anfangen +5 · Daily Quest +5 · Check-in +5 · Mahlzeit +5 · Training +20 · Shutdown +20 · Karten-Antwort +10 · Zone komplett +50 · Ziel zerlegt/Schritt geklärt +3 · Ziel komplett erreicht +100</p>
+              <p className="muted">Anfangen +5 · Daily Quest +5 · Check-in +5 · Mahlzeit +5 · Training +20 · Shutdown +20 · Karten-Antwort +10 · Zone komplett +50 · Ziel zerlegt/Schritt geklärt +3 · Ziel komplett erreicht +100 · volle Fokus-Session +10 · Handy weggelegt +3</p>
+              <p className="muted">Loot-Truhe: Nach einer Quest gibt es mit 12 % Chance (Main Quest 25 %, Frosch 40 %) eine Truhe mit 5 bis 15 Coins oder +25 XP.</p>
               <p className="muted">Level: von Level n auf n+1 brauchst du 100 + (n − 1) × 50 XP. Coins: 1 Coin pro 10 XP. XP gehen nie verloren.</p>
             </div>
           )}
@@ -151,7 +182,9 @@ export function Me() {
             Alles zurücksetzen
           </button>
         </div>
-        <p className="tiny muted center">Level Up · Phase 1 · keine Tracker, keine Analytics, alles bleibt auf deinem Gerät</p>
+        </>
+        )}
+        <p className="tiny muted center">Level Up · keine Tracker, keine Analytics, alles bleibt auf deinem Gerät</p>
       </div>
     </div>
   )

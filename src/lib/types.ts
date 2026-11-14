@@ -34,6 +34,9 @@ export interface Task {
   goalNodeId?: string
   /** Aufgabe "Ziel zerlegen": öffnet den Zerleger für dieses Ziel */
   breakdownGoalId?: string
+  /** Aufgabe gehört zu einer Pipeline-Karte; advance = Karte rückt beim Erledigen eine Spalte weiter */
+  card?: { type: 'content' | 'client'; id: string; advance: boolean }
+  recurringId?: string
   createdAt: number
 }
 
@@ -103,6 +106,10 @@ export interface DayLog {
   counted?: boolean
   reflection?: string
   trainingNote?: string
+  /** Minuten im Fokus-Timer */
+  focusMin?: number
+  /** Streak-Freeze hat diesen Tag gerettet */
+  frozen?: boolean
   xp: number
   mainsDone: number
 }
@@ -131,6 +138,59 @@ export interface GoalNode {
   minutes?: number
   done: boolean
   taskId?: string
+}
+
+export interface ContentCard {
+  id: string
+  title: string
+  /** 0 Idee · 1 Skript · 2 Gedreht · 3 Geschnitten · 4 Gepostet */
+  stage: number
+  /** in Arbeit (zählt aufs WIP-Limit) */
+  active: boolean
+  createdAt: number
+  postedAt?: number
+}
+
+export interface ClientCard {
+  id: string
+  name: string
+  /** 0 Lead · 1 Angebot · 2 Läuft · 3 Rechnung gestellt · 4 Bezahlt */
+  stage: number
+  amount?: number
+  /** Tag, an dem die Rechnung rausging (YYYY-MM-DD) */
+  invoiceDate?: string
+  /** Tag der letzten Mahn-Quest, damit sie nicht täglich neu entsteht */
+  remindedOn?: string
+  paidAt?: number
+  createdAt: number
+}
+
+/** Wöchentlich wiederkehrende Business-Quest */
+export interface Recurring {
+  id: string
+  title: string
+  zone: ZoneId
+  minutes: number
+  kind: 'deep' | 'light'
+  dread: Level3
+  /** 0 = Sonntag … 6 = Samstag */
+  weekday: number
+  active: boolean
+  lastCreated?: string
+}
+
+export interface TaxDate {
+  id: string
+  title: string
+  date: string
+  questCreated?: boolean
+}
+
+export interface Purchase {
+  id: string
+  title: string
+  cost: number
+  at: number
 }
 
 export interface Reward {
@@ -162,6 +222,12 @@ export interface Character {
 export interface Settings {
   theme: 'dark' | 'light'
   focusMinutes: number
+  /** max. gleichzeitig aktive Content-Stücke */
+  wipLimit: number
+  /** Steuer-Rücklage in Prozent */
+  taxRate: number
+  /** fester Dreh-Tag (0 = Sonntag … 6 = Samstag) */
+  shootDay?: number
   lastBackupAt?: number
 }
 
@@ -177,6 +243,15 @@ export interface AppData {
   cards: MapCard[]
   goals: Goal[]
   nodes: GoalNode[]
+  content: ContentCard[]
+  clientCards: ClientCard[]
+  recurring: Recurring[]
+  taxDates: TaxDate[]
+  purchases: Purchase[]
+  /** vorrätige Streak-Freezes */
+  freezes: number
+  /** Woche (Montag, YYYY-MM-DD), in der zuletzt ein Freeze gekauft wurde */
+  freezeWeek?: string
   /** Zonen, deren Interview abgeschlossen ist */
   zonesDone: ZoneId[]
   plans: Record<string, DayPlan>
