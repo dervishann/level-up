@@ -1,0 +1,161 @@
+import { useEffect, useMemo, useState } from 'react'
+import { todayLog, useStore } from './lib/store'
+import { currentBlock } from './lib/planner'
+import type { ZoneId } from './lib/types'
+import { Onboarding } from './views/Onboarding'
+import { Now } from './views/Now'
+import { Plan } from './views/Plan'
+import { Interview, MapView } from './views/MapView'
+import { Me } from './views/Me'
+import { Breakdown } from './views/Goals'
+import { Checkin, InboxSheet, LaterSheet, Panic, Shutdown, SortOverlay, Timer } from './views/Flows'
+
+export type Modal =
+  | null
+  | { k: 'inbox' }
+  | { k: 'sort' }
+  | { k: 'checkin' }
+  | { k: 'shutdown' }
+  | { k: 'panic' }
+  | { k: 'interview'; zone: ZoneId }
+  | { k: 'timer'; taskId: string; minutes: number }
+  | { k: 'later'; taskId: string }
+  | { k: 'breakdown'; goalId: string }
+
+type Tab = 'now' | 'plan' | 'map' | 'me'
+const TABS: { id: Tab; ico: string; label: string }[] = [
+  { id: 'now', ico: '⚡', label: 'Jetzt' },
+  { id: 'plan', ico: '🗓️', label: 'Plan' },
+  { id: 'map', ico: '🗺️', label: 'Karte' },
+  { id: 'me', ico: '🛡️', label: 'Ich' },
+]
+
+const COLORS = ['#8b5cf6', '#ec4899', '#f97316', '#22c55e', '#3b82f6', '#06b6d4', '#ef4444', '#eab308']
+
+function Feedback() {
+  const fx = useStore((s) => s.fx)
+  const clearFx = useStore((s) => s.clearFx)
+  const [level, setLevel] = useState<{ n: number; title: string } | null>(null)
+
+  useEffect(() => {
+    if (!fx) return
+    if (fx.levelUp) setLevel({ n: fx.levelUp, title: fx.title ?? '' })
+    const t = setTimeout(clearFx, 2200)
+    return () => clearTimeout(t)
+  }, [fx, clearFx])
+
+  const confetti = useMemo(
+    () =>
+      Array.from({ length: 60 }, (_, i) => ({
+        left: `${Math.random() * 100}%`,
+        background: COLORS[i % COLORS.length],
+        animationDuration: `${1.6 + Math.random() * 1.8}s`,
+        animationDelay: `${Math.random() * 0.5}s`,
+      })),
+    [level],
+  )
+
+  return (
+    <>
+      {fx && (
+        <div className="toast" key={fx.id}>
+          <span>+{fx.xp} XP</span> · {fx.label}
+        </div>
+      )}
+      {level && (
+        <>
+          <div className="levelup" onClick={() => setLevel(null)}>
+            <div className="col">
+              <h3>Level Up!</h3>
+              <div className="big">Level {level.n}</div>
+              <h2>{level.title}</h2>
+              <p className="muted small">Tippen zum Weitermachen</p>
+            </div>
+          </div>
+          <div className="confetti">
+            {confetti.map((c, i) => (
+              <i key={i} style={c} />
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+export default function App() {
+  const onboarded = useStore((s) => s.data.profile.onboarded)
+  const theme = useStore((s) => s.data.settings.theme)
+  const inboxCount = useStore((s) => s.data.inbox.length)
+  const ensureToday = useStore((s) => s.ensureToday)
+  const [tab, setTab] = useState<Tab>('now')
+  const [modal, setModal] = useState<Modal>(null)
+  const [, tick] = useState(0)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0e0f14' : '#f4f5f9')
+  }, [theme])
+
+  // Tageswechsel prüfen: beim Start, beim Zurückkommen in die App und jede Minute.
+  useEffect(() => {
+    const check = () => {
+      ensureToday()
+      tick((n) => n + 1)
+    }
+    check()
+    const i = setInterval(check, 60000)
+    const vis = () => document.visibilityState === 'visible' && check()
+    document.addEventListener('visibilitychange', vis)
+    return () => {
+      clearInterval(i)
+      document.removeEventListener('visibilitychange', vis)
+    }
+  }, [ensureToday, onboarded])
+
+  const close = () => setModal(null)
+
+  if (!onboarded) return <Onboarding onDone={() => setModal({ k: 'interview', zone: 1 })} />
+
+  const panicStep = () => {
+    const d = useStore.getState().data
+    const cur = currentBlock(d.plans[d.lastDate], todayLog(d).blocksDone)
+    const t = cur?.taskId ? d.tasks.find((x) => x.id === cur.taskId) : undefined
+    return t ? t.steps[Math.min(t.stepsDone, t.steps.length - 1)] : cur?.title
+  }
+
+  return (
+    <div className="app">
+      {tab === 'now' && <Now open={setModal} />}
+      {tab === 'plan' && <Plan open={setModal} />}
+      {tab === 'map' && <MapView open={setModal} />}
+      {tab === 'me' && <Me />}
+
+      <button className="fab" onClick={() => setModal({ k: 'inbox' })} aria-label="In die Inbox schreiben">
+        +{inboxCount > 0 && <span className="badge">{inboxCount}</span>}
+      </button>
+
+      <nav className="tabs">
+        {TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
+            <span className="ico">{t.ico}</span>
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {modal?.k === 'inbox' && <InboxSheet onClose={close} onSort={() => setModal({ k: 'sort' })} />}
+      {modal?.k === 'sort' && <SortOverlay onClose={close} onBreakdown={(goalId) => setModal({ k: 'breakdown', goalId })} />}
+      {modal?.k === 'checkin' && <Checkin onClose={close} />}
+      {modal?.k === 'shutdown' && <Shutdown onClose={close} />}
+      {modal?.k === 'panic' && <Panic onClose={close} small={panicStep()} />}
+      {modal?.k === 'interview' && <Interview zone={modal.zone} onClose={close} />}
+      {modal?.k === 'timer' && <Timer taskId={modal.taskId} minutes={modal.minutes} onClose={close} />}
+      {modal?.k === 'later' && <LaterSheet taskId={modal.taskId} onClose={close} />}
+
+      {modal?.k === 'breakdown' && <Breakdown goalId={modal.goalId} onClose={close} />}
+
+      <Feedback />
+    </div>
+  )
+}
