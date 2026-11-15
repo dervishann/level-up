@@ -249,6 +249,8 @@ export interface AppData {
   taxDates: TaxDate[]
   /** Wenn-Dann-Pläne für typische Problemsituationen */
   ifThen: { id: string; when: string; then: string }[]
+  /** Verlauf der Life Dumps (Rohtext), neueste zuerst */
+  dumps: { id: string; text: string; at: number }[]
   purchases: Purchase[]
   /** vorrätige Streak-Freezes */
   freezes: number

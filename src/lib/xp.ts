@@ -22,6 +22,7 @@ export const XP = {
   comeback: 25,
   inboxSorted: 2,
   nodeClear: 3,
+  dumpItem: 2,
   focusSession: 10,
   phoneAway: 3,
   goalDone: 100,

@@ -232,3 +232,12 @@ textarea { resize: none; min-height: 110px; }
 .loot span { color: var(--gold); font-weight: 800; font-size: 22px; }
 @keyframes loot { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.6); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); } 20% { transform: translate(-50%, -50%) scale(1); } 82% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -60%) scale(0.95); } }
 @keyframes shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+
+/* ---------- Life Dump ---------- */
+.dump-area { min-height: 46vh; font-size: 17px; line-height: 1.55; }
+.dump-item { border-left: 5px solid var(--zone); }
+.dump-text { background: transparent; border: 0; padding: 0; font-size: 17px; font-weight: 600; min-height: 0; line-height: 1.35; }
+.dump-text:focus { border-bottom: 1px solid var(--zone); border-radius: 0; }
+.dump-types { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -4px; padding: 0 4px; }
+.dump-types::-webkit-scrollbar { display: none; }
+.dump-types .chip { flex: none; min-height: 38px; padding: 7px 11px; font-size: 14px; }

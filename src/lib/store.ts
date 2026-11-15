@@ -7,6 +7,7 @@ import { coinsFor, FREEZE_COST, levelInfo, taskXp, XP, ZONE_STAT } from './xp'
 import { activeCount, clientStep, contentStep, invoiceStep, isOverdue, LAST_STAGE, nextWeekday, reminderStep, taxStep, weekStart, type StepSpec } from './pipelines'
 import { suggestKind, suggestSteps, suggestZone } from './suggest'
 import { ZONE_ORDER, zone as zoneInfo } from './zones'
+import type { DumpItem } from './dump'
 import { childrenOf, nextActionable, propagateDone, subtree, type NodeDraft } from './goals'
 
 export const emptyDay = (): DayLog => ({ dailiesDone: [], blocksDone: [], xp: 0, mainsDone: 0 })
@@ -40,6 +41,7 @@ export const freshData = (): AppData => ({
   recurring: DEFAULT_RECURRING,
   taxDates: [],
   ifThen: [],
+  dumps: [],
   purchases: [],
   freezes: 0,
   zonesDone: [],
@@ -136,6 +138,7 @@ interface Store {
   buyFreeze: () => boolean
   addIfThen: (when: string, then: string) => void
   deleteIfThen: (id: string) => void
+  applyDump: (raw: string, items: DumpItem[], inboxIds?: string[]) => void
   phoneAway: () => void
   setTheme: (t: 'dark' | 'light') => void
   updateProfile: (p: Partial<AppData['profile']>) => void
@@ -933,6 +936,42 @@ export const useStore = create<Store>()(
 
         addIfThen: (when, then) => mutate((d) => void d.ifThen.push({ id: uid(), when: when.trim(), then: then.trim() })),
         deleteIfThen: (id) => mutate((d) => void (d.ifThen = d.ifThen.filter((r) => r.id !== id))),
+
+        // Life Dump: alle bestätigten Punkte auf einmal einpflegen
+        applyDump: (raw, items, inboxIds = []) =>
+          mutate((d) => {
+            const today = dateKey()
+            let count = 0
+            for (const it of items) {
+              const title = it.text.trim()
+              if (!title || it.type === 'skip') continue
+              count++
+              if (it.type === 'task') {
+                d.tasks.push(makeTask({ title, zone: it.zone, minutes: it.minutes, kind: it.kind, priority: it.priority, dread: it.dread, date: it.date, deadline: it.deadline }))
+              } else if (it.type === 'goal') {
+                const goalId = uid()
+                d.goals.push({ id: goalId, zone: it.zone, title })
+                const q = makeTask({ title: `Ziel zerlegen: ${title}`, zone: it.zone, minutes: 15, kind: 'deep', priority: 3, dread: 1, date: addDays(today, 1) })
+                q.breakdownGoalId = goalId
+                q.steps = ['Auf „Zerlegen starten“ tippen', 'Fragen beantworten, bis jeder Schritt in eine Sitzung passt', 'Die ersten Schritte landen automatisch im Plan']
+                d.tasks.push(q)
+              } else if (it.type === 'idea') {
+                d.ideas.push({ id: uid(), text: title, zone: it.zone, createdAt: Date.now() })
+              } else if (it.type === 'content') {
+                d.content.push({ id: uid(), title: title.replace(/^(idee|video|reel)[:\s]+/i, ''), stage: 0, active: false, createdAt: Date.now() })
+              } else if (it.type === 'lead') {
+                const c: ClientCard = { id: uid(), name: (it.name || title).trim(), stage: 0, createdAt: Date.now() }
+                d.clientCards.push(c)
+                syncClientCard(d, c)
+              } else if (it.type === 'note') {
+                d.cards.push({ id: uid(), zone: it.zone, text: title })
+              }
+            }
+            if (inboxIds.length) d.inbox = d.inbox.filter((i) => !inboxIds.includes(i.id))
+            if (raw.trim()) d.dumps = [{ id: uid(), text: raw.trim(), at: Date.now() }, ...d.dumps].slice(0, 30)
+            rebuildToday(d)
+            if (count) return { xp: Math.min(30, count * XP.dumpItem), label: `Kopf leer: ${count} Punkte einsortiert`, stat: 'klarheit' }
+          }),
 
         phoneAway: () => mutate(() => ({ xp: XP.phoneAway, label: 'Handy ist weg', stat: 'disziplin' })),
 

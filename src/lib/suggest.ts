@@ -18,6 +18,8 @@ const ZONE_WORDS: [ZoneId, string[]][] = [
 
 export function suggestZone(text: string): ZoneId {
   const t = text.toLowerCase()
+  // Gesundheit schlägt Tätigkeitswörter wie „anrufen“ (sonst landet „Zahnarzt anrufen“ bei Kunden)
+  if (has(t, ['arzt', 'physio', 'krankenkasse', 'apotheke', 'therapie', 'zahn'])) return 7
   for (const [z, words] of ZONE_WORDS) if (has(t, words)) return z
   return 5
 }

@@ -248,6 +248,10 @@ export function Now({ open }: { open: (m: Modal) => void }) {
           </div>
         )}
 
+        <button className="btn" onClick={() => open({ k: 'dump' })}>
+          🧠 Life Dump: Kopf leeren
+        </button>
+
         <button className="btn ghost" onClick={() => open({ k: 'panic' })}>
           Alles zu viel
         </button>

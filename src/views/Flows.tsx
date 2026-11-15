@@ -9,7 +9,7 @@ import { Chips, Overlay, Progress, Scale, Sheet, ZoneBadge, buzz, zoneStyle } fr
 
 // ---------- Inbox: alles reinkippen ----------
 
-export function InboxSheet({ onClose, onSort }: { onClose: () => void; onSort: () => void }) {
+export function InboxSheet({ onClose, onSort, onDump }: { onClose: () => void; onSort: () => void; onDump: () => void }) {
   const add = useStore((s) => s.addInbox)
   const count = useStore((s) => s.data.inbox.length)
   const [text, setText] = useState('')
@@ -33,6 +33,9 @@ export function InboxSheet({ onClose, onSort }: { onClose: () => void; onSort: (
       <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)} placeholder="Aufgabe, Idee, Termin, Gedanke … Eine Zeile pro Sache. Sortiert wird später." />
       <button className="btn primary" disabled={!text.trim()} onClick={save}>
         Rein damit
+      </button>
+      <button className="btn" onClick={onDump}>
+        🧠 Life Dump: alles auf einmal rausschreiben
       </button>
       {count > 0 && (
         <button className="btn ghost" onClick={onSort}>
@@ -122,13 +125,18 @@ export function SortItem({ item, onBreakdown }: { item: InboxItem; onBreakdown?:
   )
 }
 
-export function SortOverlay({ onClose, onBreakdown }: { onClose: () => void; onBreakdown?: (goalId: string) => void }) {
+export function SortOverlay({ onClose, onBreakdown, onDump }: { onClose: () => void; onBreakdown?: (goalId: string) => void; onDump?: (text: string, inboxIds: string[]) => void }) {
   const inbox = useStore((s) => s.data.inbox)
   const item = inbox[0]
   return (
     <Overlay>
       <div className="row between">
         <h3>Inbox sortieren · noch {inbox.length}</h3>
+        {onDump && inbox.length > 1 && (
+          <button className="btn sm" onClick={() => onDump(inbox.map((i) => i.text).join('\n'), inbox.map((i) => i.id))}>
+            Alle auf einmal
+          </button>
+        )}
         <button className="x" onClick={onClose} aria-label="Schließen">
           ✕
         </button>

@@ -9,6 +9,7 @@ import { Interview, MapView } from './views/MapView'
 import { Me } from './views/Me'
 import { Breakdown } from './views/Goals'
 import { Business } from './views/Business'
+import { LifeDump } from './views/LifeDump'
 import { Checkin, InboxSheet, LaterSheet, Panic, Shutdown, SortOverlay, Timer } from './views/Flows'
 
 export type Modal =
@@ -22,6 +23,7 @@ export type Modal =
   | { k: 'timer'; taskId: string; minutes: number }
   | { k: 'later'; taskId: string }
   | { k: 'breakdown'; goalId: string }
+  | { k: 'dump'; text?: string; inboxIds?: string[] }
 
 type Tab = 'now' | 'plan' | 'biz' | 'map' | 'me'
 const TABS: { id: Tab; ico: string; label: string }[] = [
@@ -156,8 +158,9 @@ export default function App() {
         ))}
       </nav>
 
-      {modal?.k === 'inbox' && <InboxSheet onClose={close} onSort={() => setModal({ k: 'sort' })} />}
-      {modal?.k === 'sort' && <SortOverlay onClose={close} onBreakdown={(goalId) => setModal({ k: 'breakdown', goalId })} />}
+      {modal?.k === 'inbox' && <InboxSheet onClose={close} onSort={() => setModal({ k: 'sort' })} onDump={() => setModal({ k: 'dump' })} />}
+      {modal?.k === 'sort' && <SortOverlay onClose={close} onBreakdown={(goalId) => setModal({ k: 'breakdown', goalId })} onDump={(text, inboxIds) => setModal({ k: 'dump', text, inboxIds })} />}
+      {modal?.k === 'dump' && <LifeDump onClose={close} initialText={modal.text} inboxIds={modal.inboxIds} />}
       {modal?.k === 'checkin' && <Checkin onClose={close} />}
       {modal?.k === 'shutdown' && <Shutdown onClose={close} />}
       {modal?.k === 'panic' && <Panic onClose={close} small={panicStep()} />}
